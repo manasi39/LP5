@@ -1,0 +1,112 @@
+#include <iostream>
+#include <queue>
+#include <vector>
+#include <omp.h>
+
+using namespace std;
+
+// Tree Node
+struct TreeNode {
+    int data;
+    vector<TreeNode*> children;
+};
+
+// Graph Node
+struct GraphNode {
+    int data;
+    vector<GraphNode*> neighbors;
+};
+
+// Parallel Breadth First Search (BFS)
+void parallelBFS(TreeNode* root) {
+    queue<TreeNode*> q;
+    q.push(root);
+
+    while (!q.empty()) {
+        #pragma omp parallel
+        {
+            queue<TreeNode*> privateQueue;
+
+            #pragma omp for
+            for (int i = 0; i < q.size(); i++) {
+                TreeNode* node = q.front();
+                q.pop();
+                cout << node->data << " ";
+
+                // Add unvisited children to the private queue
+                for (auto child : node->children) {
+                    if (child != nullptr) {
+                        #pragma omp critical
+                        privateQueue.push(child);
+                    }
+                }
+            }
+
+            #pragma omp critical
+            {
+                // Merge private queues into the shared queue
+                while (!privateQueue.empty()) {
+                    q.push(privateQueue.front());
+                    privateQueue.pop();
+                }
+            }
+        }
+    }
+}
+
+// Parallel Depth First Search (DFS)
+void parallelDFS(GraphNode* node, vector<bool>& visited) {
+    if (visited[node->data])
+        return;
+
+    #pragma omp critical
+    {
+        visited[node->data] = true;
+        cout << node->data << " ";
+    }
+
+    #pragma omp parallel
+    {
+        #pragma omp for
+        for (int i = 0; i < node->neighbors.size(); i++) {
+            GraphNode* neighbor = node->neighbors[i];
+            parallelDFS(neighbor, visited);
+        }
+    }
+}
+
+int main() {
+    // Example usage with a Tree
+    TreeNode* root = new TreeNode{1, {}};
+    TreeNode* child1 = new TreeNode{2, {}};
+    TreeNode* child2 = new TreeNode{3, {}};
+    TreeNode* child3 = new TreeNode{4, {}};
+
+    root->children.push_back(child1);
+    root->children.push_back(child2);
+    root->children.push_back(child3);
+
+    cout << "Parallel BFS (Tree): ";
+    parallelBFS(root);
+    cout << endl;
+
+    // Example usage with an undirected Graph
+    GraphNode* node1 = new GraphNode{1, {}};
+    GraphNode* node2 = new GraphNode{2, {}};
+    GraphNode* node3 = new GraphNode{3, {}};
+    GraphNode* node4 = new GraphNode{4, {}};
+
+    node1->neighbors.push_back(node2);
+    node2->neighbors.push_back(node1);
+    node2->neighbors.push_back(node3);
+    node3->neighbors.push_back(node2);
+    node3->neighbors.push_back(node4);
+    node4->neighbors.push_back(node3);
+
+    cout << "Parallel DFS (Graph): ";
+    vector<bool> visited(5, false);
+    parallelDFS(node1, visited);
+    cout << endl;
+
+    return 0;
+}
