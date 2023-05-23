@@ -1,112 +1,83 @@
 #include <iostream>
-#include <queue>
 #include <vector>
+#include <queue>
+#include <stack>
 #include <omp.h>
 
 using namespace std;
 
-// Tree Node
-struct TreeNode {
-    int data;
-    vector<TreeNode*> children;
-};
+// Function to perform parallel Breadth First Search (BFS)
+void parallelBFS(vector<vector<int>>& graph, int startVertex) {
+    int numVertices = graph.size();
 
-// Graph Node
-struct GraphNode {
-    int data;
-    vector<GraphNode*> neighbors;
-};
+    vector<bool> visited(numVertices, false);
+    queue<int> q;
 
-// Parallel Breadth First Search (BFS)
-void parallelBFS(TreeNode* root) {
-    queue<TreeNode*> q;
-    q.push(root);
+    visited[startVertex] = true;
+    q.push(startVertex);
 
     while (!q.empty()) {
-        #pragma omp parallel
-        {
-            queue<TreeNode*> privateQueue;
+        int currentVertex = q.front();
+        q.pop();
+        cout << "Visited: " << currentVertex << endl;
 
-            #pragma omp for
-            for (int i = 0; i < q.size(); i++) {
-                TreeNode* node = q.front();
-                q.pop();
-                cout << node->data << " ";
-
-                // Add unvisited children to the private queue
-                for (auto child : node->children) {
-                    if (child != nullptr) {
-                        #pragma omp critical
-                        privateQueue.push(child);
-                    }
-                }
-            }
-
-            #pragma omp critical
-            {
-                // Merge private queues into the shared queue
-                while (!privateQueue.empty()) {
-                    q.push(privateQueue.front());
-                    privateQueue.pop();
-                }
+        #pragma omp parallel for
+        for (int i = 0; i < graph[currentVertex].size(); ++i) {
+            int adjacentVertex = graph[currentVertex][i];
+            if (!visited[adjacentVertex]) {
+                visited[adjacentVertex] = true;
+                q.push(adjacentVertex);
             }
         }
     }
 }
 
-// Parallel Depth First Search (DFS)
-void parallelDFS(GraphNode* node, vector<bool>& visited) {
-    if (visited[node->data])
-        return;
+// Function to perform parallel Depth First Search (DFS)
+void parallelDFS(vector<vector<int>>& graph, int startVertex) {
+    int numVertices = graph.size();
 
-    #pragma omp critical
-    {
-        visited[node->data] = true;
-        cout << node->data << " ";
-    }
+    vector<bool> visited(numVertices, false);
+    stack<int> s;
 
-    #pragma omp parallel
-    {
-        #pragma omp for
-        for (int i = 0; i < node->neighbors.size(); i++) {
-            GraphNode* neighbor = node->neighbors[i];
-            parallelDFS(neighbor, visited);
+    s.push(startVertex);
+
+    while (!s.empty()) {
+        int currentVertex = s.top();
+        s.pop();
+
+        if (!visited[currentVertex]) {
+            visited[currentVertex] = true;
+            cout << "Visited: " << currentVertex << endl;
+
+            #pragma omp parallel for
+            for (int i = 0; i < graph[currentVertex].size(); ++i) {
+                int adjacentVertex = graph[currentVertex][i];
+                if (!visited[adjacentVertex]) {
+                    s.push(adjacentVertex);
+                }
+            }
         }
     }
 }
 
 int main() {
-    // Example usage with a Tree
-    TreeNode* root = new TreeNode{1, {}};
-    TreeNode* child1 = new TreeNode{2, {}};
-    TreeNode* child2 = new TreeNode{3, {}};
-    TreeNode* child3 = new TreeNode{4, {}};
+    int numVertices = 6;
+    vector<vector<int>> graph(numVertices);
 
-    root->children.push_back(child1);
-    root->children.push_back(child2);
-    root->children.push_back(child3);
+    // Add edges to the graph (undirected)
+    graph[0].push_back(1);
+    graph[0].push_back(2);
+    graph[1].push_back(3);
+    graph[1].push_back(4);
+    graph[2].push_back(5);
 
-    cout << "Parallel BFS (Tree): ";
-    parallelBFS(root);
+    cout << "Parallel Breadth First Search (BFS):" << endl;
+    parallelBFS(graph, 0);
+
     cout << endl;
 
-    // Example usage with an undirected Graph
-    GraphNode* node1 = new GraphNode{1, {}};
-    GraphNode* node2 = new GraphNode{2, {}};
-    GraphNode* node3 = new GraphNode{3, {}};
-    GraphNode* node4 = new GraphNode{4, {}};
-
-    node1->neighbors.push_back(node2);
-    node2->neighbors.push_back(node1);
-    node2->neighbors.push_back(node3);
-    node3->neighbors.push_back(node2);
-    node3->neighbors.push_back(node4);
-    node4->neighbors.push_back(node3);
-
-    cout << "Parallel DFS (Graph): ";
-    vector<bool> visited(5, false);
-    parallelDFS(node1, visited);
-    cout << endl;
+    cout << "Parallel Depth First Search (DFS):" << endl;
+    parallelDFS(graph, 0);
 
     return 0;
 }
